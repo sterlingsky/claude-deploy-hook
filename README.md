@@ -1,0 +1,285 @@
+# Claude Deploy Hook
+
+A universal deployment hook for [Claude Code](https://claude.ai/claude-code) with smart environment variable management. Supports multiple cloud providers with a modular architecture.
+
+## Features
+
+- **Smart env var sync** - Automatically adds new vars, updates changed vars, prompts before removing
+- **Secret preservation** - Always preserves secrets from live deployments
+- **Multi-provider** - GCP, Firebase, Vercel, Cloudflare, Railway (easily extensible)
+- **Auto-detection** - Detects provider from project files
+- **Dry run mode** - Preview changes before deploying
+- **Non-destructive defaults** - Keeps existing vars in non-interactive mode
+
+## Supported Providers
+
+| Provider | ID | Auto-detects from |
+|----------|-----|-------------------|
+| GCP Cloud Run | `gcp-cloud-run` | `Dockerfile`, `service.yaml` |
+| Firebase Functions | `gcp-firebase-functions` | `firebase.json`, `functions/` |
+| Vercel | `vercel` | `vercel.json`, `.vercel/` |
+| Cloudflare Workers | `cloudflare-workers` | `wrangler.toml` |
+| Cloudflare Pages | `cloudflare-pages` | `wrangler.toml` with `pages_build_output_dir` |
+| Railway | `railway` | `railway.json`, `railway.toml` |
+
+## Installation
+
+### Quick Install
+
+```bash
+# Clone into your project's .claude/hooks directory
+git clone https://github.com/YOUR_USERNAME/claude-deploy-hook.git .claude/hooks/deploy
+```
+
+### Manual Install
+
+1. Copy the files to `.claude/hooks/` in your project:
+   ```
+   .claude/hooks/
+   ├── deploy.sh
+   ├── lib/
+   │   └── env-compare.sh
+   └── providers/
+       ├── gcp-cloud-run.sh
+       ├── gcp-firebase-functions.sh
+       ├── vercel.sh
+       ├── cloudflare-workers.sh
+       ├── cloudflare-pages.sh
+       └── railway.sh
+   ```
+
+2. Make scripts executable:
+   ```bash
+   chmod +x .claude/hooks/deploy.sh .claude/hooks/lib/*.sh .claude/hooks/providers/*.sh
+   ```
+
+3. Add to `.claude/settings.json`:
+   ```json
+   {
+     "hooks": {
+       "PostToolUse": [
+         {
+           "matcher": "Bash",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|firebase deploy|vercel|wrangler deploy|railway up)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
+               "timeout": 600
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+
+## Usage
+
+### Command Line
+
+```bash
+# Auto-detect provider and deploy
+.claude/hooks/deploy.sh
+
+# Specify provider explicitly
+.claude/hooks/deploy.sh --provider=gcp-cloud-run
+
+# Dry run (show what would happen without deploying)
+.claude/hooks/deploy.sh --dry-run
+
+# Use specific env file
+.claude/hooks/deploy.sh --env-file=.env.staging
+
+# List available providers
+.claude/hooks/deploy.sh --list-providers
+
+# Show help
+.claude/hooks/deploy.sh --help
+```
+
+### As Claude Code Hook
+
+The hook automatically triggers when you run deployment commands like:
+- `gcloud run deploy`
+- `firebase deploy`
+- `vercel`
+- `wrangler deploy`
+- `railway up`
+
+### As Slash Command
+
+Create `.claude/commands/deploy.md`:
+```markdown
+# Deploy
+
+Deploy to cloud with smart env var management.
+
+\`\`\`bash
+"$CLAUDE_PROJECT_DIR"/.claude/hooks/deploy.sh
+\`\`\`
+```
+
+Then use `/deploy` in Claude Code.
+
+## How It Works
+
+1. **Detects provider** from project files (or uses `--provider` flag)
+2. **Fetches live env vars** from the deployed service
+3. **Reads local env file** (`.env.production`, `.env`, etc.)
+4. **Compares** live vs local:
+   - New vars in local → **Auto-add**
+   - Changed vars → **Auto-update**
+   - Vars in live but not local → **Prompt to remove** (keeps by default)
+5. **Preserves secrets** from the live deployment
+6. **Deploys** with the merged configuration
+
+## Configuration
+
+### Environment Variables
+
+#### Common
+| Variable | Description |
+|----------|-------------|
+| `DEPLOY_PROVIDER` | Override auto-detection |
+| `DEPLOY_ENV_FILE` | Path to local env file |
+| `DEPLOY_DRY_RUN=1` | Enable dry run mode |
+
+#### GCP Cloud Run
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID | (required) |
+| `CLOUD_RUN_SERVICE` | Service name | (required) |
+| `CLOUD_RUN_REGION` | Region | `us-central1` |
+
+#### Firebase Functions
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID | (required) |
+| `FIREBASE_FUNCTIONS_GEN` | Generation (1 or 2) | `2` |
+
+#### Vercel
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VERCEL_PROJECT` | Project name | (auto-detect) |
+| `VERCEL_ENV` | Environment | `production` |
+
+#### Cloudflare Workers
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CF_WORKER_NAME` | Worker name | (from wrangler.toml) |
+| `CF_ACCOUNT_ID` | Account ID | (optional, for API) |
+| `CF_API_TOKEN` | API token | (optional, for API) |
+
+#### Cloudflare Pages
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CF_PAGES_PROJECT` | Project name | (required) |
+| `CF_PAGES_BRANCH` | Branch | `main` |
+| `CF_ACCOUNT_ID` | Account ID | (required for env vars) |
+| `CF_API_TOKEN` | API token | (required for env vars) |
+
+#### Railway
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RAILWAY_ENVIRONMENT` | Environment | `production` |
+
+### Local Env File Search Order
+
+1. `.env.production`
+2. `.env`
+3. `.env.local`
+4. `functions/.env`
+
+## Adding Custom Providers
+
+Create a new file in `providers/` implementing these functions:
+
+```bash
+#!/bin/bash
+# providers/my-provider.sh
+
+PROVIDER_NAME="My Provider"
+PROVIDER_ID="my-provider"
+
+# Return 0 if this project uses this provider
+detect() {
+  [ -f "${PROJECT_DIR}/my-config.json" ] && return 0
+  return 1
+}
+
+# Validate required configuration, return non-zero on error
+validate_config() {
+  [ -z "$MY_API_KEY" ] && echo "Error: MY_API_KEY not set" && return 1
+  return 0
+}
+
+# Return 0 if service exists
+service_exists() {
+  my-cli status &>/dev/null
+}
+
+# Output KEY=VALUE per line to stdout
+fetch_live_env() {
+  my-cli env list | grep "=" || true
+}
+
+# Output secret references to stdout
+fetch_live_secrets() {
+  my-cli secrets list || true
+}
+
+# Deploy with merged env vars
+# Args: env_vars secrets vars_to_remove source_dir
+deploy() {
+  local env_vars="$1"
+  local secrets="$2"
+  local vars_to_remove="$3"
+  local source_dir="$4"
+
+  # Set env vars, remove old ones, deploy
+  my-cli deploy --env "$env_vars" --source "$source_dir"
+}
+
+# Print provider info
+print_info() {
+  echo "Provider: $PROVIDER_NAME"
+}
+```
+
+## Examples
+
+See the `examples/` directory for sample configurations:
+
+- `examples/gcp-cloud-run/` - Cloud Run with Firebase backend
+- `examples/vercel-nextjs/` - Next.js on Vercel
+- `examples/cloudflare-workers/` - Cloudflare Workers API
+
+## Requirements
+
+- Bash 4.0+
+- `jq` for JSON parsing
+- Provider-specific CLI tools:
+  - GCP: `gcloud`, `firebase`
+  - Vercel: `vercel`
+  - Cloudflare: `wrangler`
+  - Railway: `railway`
+
+## License
+
+MIT License - see [LICENSE](LICENSE)
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests if applicable
+4. Submit a pull request
+
+### Adding a Provider
+
+1. Create `providers/your-provider.sh`
+2. Implement required functions (see "Adding Custom Providers")
+3. Add documentation to README
+4. Submit PR
