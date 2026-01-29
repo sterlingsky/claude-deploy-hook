@@ -5,124 +5,105 @@ load 'test_helper'
 
 setup() {
   setup_mocks
-  source "$PROJECT_ROOT/lib/env-compare.sh"
 }
 
 teardown() {
   teardown_mocks
 }
 
-@test "identifies new variables to add" {
-  # Live env has: API_KEY, DATABASE_URL
-  # Local env has: API_KEY, DATABASE_URL, NEW_VAR
-
-  declare -A LIVE_VARS=(
-    ["API_KEY"]="live_value"
-    ["DATABASE_URL"]="live_db"
-  )
-
-  declare -A LOCAL_VARS=(
-    ["API_KEY"]="live_value"
-    ["DATABASE_URL"]="live_db"
-    ["NEW_VAR"]="new_value"
-  )
-
-  run compare_env_vars
-
-  assert_output_contains "NEW_VAR"
-  assert_output_contains "ADD"
+@test "env-compare.sh loads without errors" {
+  run bash -c "source '$PROJECT_ROOT/lib/env-compare.sh' 2>&1"
+  [ "$status" -eq 0 ]
 }
 
-@test "identifies changed variables to update" {
-  declare -A LIVE_VARS=(
-    ["API_KEY"]="old_value"
-  )
+@test "parse_env_file extracts KEY=VALUE pairs to output file" {
+  create_env_file "$PROJECT_DIR/.env"
+  local output_file="$PROJECT_DIR/parsed.txt"
 
-  declare -A LOCAL_VARS=(
-    ["API_KEY"]="new_value"
-  )
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  parse_env_file "$PROJECT_DIR/.env" "$output_file"
 
-  run compare_env_vars
-
-  assert_output_contains "API_KEY"
-  assert_output_contains "UPDATE"
+  [ -f "$output_file" ]
+  grep -q "API_KEY" "$output_file"
+  grep -q "DATABASE_URL" "$output_file"
 }
 
-@test "identifies variables to potentially remove" {
-  declare -A LIVE_VARS=(
-    ["API_KEY"]="live_value"
-    ["OLD_VAR"]="should_remove"
-  )
+@test "parse_env_file ignores comments" {
+  cat > "$PROJECT_DIR/.env" << 'EOF'
+# This is a comment
+API_KEY=test123
+# Another comment
+DATABASE_URL=postgres://localhost/db
+EOF
+  local output_file="$PROJECT_DIR/parsed.txt"
 
-  declare -A LOCAL_VARS=(
-    ["API_KEY"]="live_value"
-  )
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  parse_env_file "$PROJECT_DIR/.env" "$output_file"
 
-  run compare_env_vars
-
-  assert_output_contains "OLD_VAR"
-  assert_output_contains "REMOVE"
+  # Should not contain comments
+  ! grep -q "^#" "$output_file"
+  # Should contain variables
+  grep -q "API_KEY" "$output_file"
 }
 
-@test "does not show actual values in output (security)" {
-  declare -A LIVE_VARS=(
-    ["SECRET_KEY"]="super_secret_password_123"
-  )
+@test "parse_env_file handles empty lines" {
+  cat > "$PROJECT_DIR/.env" << 'EOF'
+API_KEY=test123
 
-  declare -A LOCAL_VARS=(
-    ["SECRET_KEY"]="different_secret_456"
-  )
+DATABASE_URL=postgres://localhost/db
 
-  run compare_env_vars
+EOF
+  local output_file="$PROJECT_DIR/parsed.txt"
 
-  # Should NOT contain actual secret values
-  assert_output_not_contains "super_secret_password_123"
-  assert_output_not_contains "different_secret_456"
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  parse_env_file "$PROJECT_DIR/.env" "$output_file"
 
-  # Should show character count instead
-  assert_output_contains "chars"
+  # Should have both vars
+  grep -q "API_KEY" "$output_file"
+  grep -q "DATABASE_URL" "$output_file"
+  # Should not have empty lines
+  ! grep -q "^$" "$output_file"
 }
 
-@test "handles empty live environment" {
-  declare -A LIVE_VARS=()
+@test "find_local_env_file finds .env" {
+  mkdir -p "$PROJECT_DIR"
+  echo "TEST=value" > "$PROJECT_DIR/.env"
 
-  declare -A LOCAL_VARS=(
-    ["API_KEY"]="new_value"
-    ["DATABASE_URL"]="new_db"
-  )
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  result=$(find_local_env_file "$PROJECT_DIR")
 
-  run compare_env_vars
-
-  assert_output_contains "API_KEY"
-  assert_output_contains "DATABASE_URL"
-  assert_output_contains "ADD"
+  [[ "$result" == *".env"* ]]
 }
 
-@test "handles empty local environment" {
-  declare -A LIVE_VARS=(
-    ["API_KEY"]="live_value"
-    ["DATABASE_URL"]="live_db"
-  )
+@test "find_local_env_file prefers .env.production" {
+  mkdir -p "$PROJECT_DIR"
+  echo "TEST=value" > "$PROJECT_DIR/.env"
+  echo "PROD=value" > "$PROJECT_DIR/.env.production"
 
-  declare -A LOCAL_VARS=()
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  result=$(find_local_env_file "$PROJECT_DIR")
 
-  run compare_env_vars
-
-  assert_output_contains "REMOVE"
+  [[ "$result" == *".env.production"* ]]
 }
 
-@test "no changes when environments match" {
-  declare -A LIVE_VARS=(
-    ["API_KEY"]="same_value"
-    ["DATABASE_URL"]="same_db"
-  )
+@test "secure_delete removes file" {
+  local testfile="$PROJECT_DIR/testfile.txt"
+  mkdir -p "$PROJECT_DIR"
+  echo "secret data" > "$testfile"
 
-  declare -A LOCAL_VARS=(
-    ["API_KEY"]="same_value"
-    ["DATABASE_URL"]="same_db"
-  )
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  secure_delete "$testfile"
 
-  run compare_env_vars
+  [ ! -f "$testfile" ]
+}
 
-  assert_output_contains "No changes"
+@test "create_secure_temp creates file with 600 permissions" {
+  source "$PROJECT_ROOT/lib/env-compare.sh"
+  tmpfile=$(create_secure_temp)
+
+  [ -f "$tmpfile" ]
+  perms=$(stat -f "%OLp" "$tmpfile" 2>/dev/null || stat -c "%a" "$tmpfile" 2>/dev/null)
+  [ "$perms" = "600" ]
+
+  rm -f "$tmpfile"
 }

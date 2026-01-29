@@ -35,6 +35,11 @@ secure_delete() {
   fi
 }
 
+# Global associative arrays (declared at script level for bash 3.x compatibility)
+# These must be declared before compare_env_vars is called
+declare -A LIVE_VARS 2>/dev/null || true
+declare -A LOCAL_VARS 2>/dev/null || true
+
 # Compare environment variables between live and local
 # Sets: VARS_TO_ADD, VARS_TO_UPDATE, VARS_TO_REMOVE, VARS_UNCHANGED
 # SECURITY: Never prints actual values
@@ -42,10 +47,7 @@ compare_env_vars() {
   local live_file="$1"
   local local_file="$2"
 
-  # Build associative arrays
-  declare -gA LIVE_VARS
-  declare -gA LOCAL_VARS
-
+  # Reset associative arrays
   LIVE_VARS=()
   LOCAL_VARS=()
 
