@@ -28,7 +28,7 @@ A universal deployment hook for [Claude Code](https://claude.ai/claude-code) wit
 
 ```bash
 # Clone into your project's .claude/hooks directory
-git clone https://github.com/YOUR_USERNAME/claude-deploy-hook.git .claude/hooks/deploy
+git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
 ```
 
 ### Manual Install

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Claude Deploy Hook - Universal Deployment with Smart Env Var Management
-# https://github.com/YOUR_USERNAME/claude-deploy-hook
+# https://github.com/sterlingsky/claude-deploy-hook
 #
 # Supports multiple cloud providers with modular architecture:
 # - GCP Cloud Run, Firebase Functions
