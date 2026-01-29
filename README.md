@@ -16,6 +16,7 @@ A universal deployment hook for [Claude Code](https://claude.ai/claude-code) wit
 | Provider | ID | Auto-detects from |
 |----------|-----|-------------------|
 | GCP Cloud Run | `gcp-cloud-run` | `Dockerfile`, `service.yaml` |
+| GCP Cloud Functions | `gcp-cloud-functions` | `cloudfunctions.yaml`, `.gcloudignore` |
 | Firebase Functions | `gcp-firebase-functions` | `firebase.json`, `functions/` |
 | Vercel | `vercel` | `vercel.json`, `.vercel/` |
 | Cloudflare Workers | `cloudflare-workers` | `wrangler.toml` |
@@ -41,6 +42,7 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
    │   └── env-compare.sh
    └── providers/
        ├── gcp-cloud-run.sh
+       ├── gcp-cloud-functions.sh
        ├── gcp-firebase-functions.sh
        ├── vercel.sh
        ├── cloudflare-workers.sh
@@ -63,7 +65,7 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
            "hooks": [
              {
                "type": "command",
-               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|firebase deploy|vercel|wrangler deploy|railway up)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
+               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|gcloud functions deploy|firebase deploy|vercel|wrangler deploy|railway up)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
                "timeout": 600
              }
            ]
@@ -101,6 +103,7 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
 
 The hook automatically triggers when you run deployment commands like:
 - `gcloud run deploy`
+- `gcloud functions deploy`
 - `firebase deploy`
 - `vercel`
 - `wrangler deploy`
@@ -150,6 +153,16 @@ Then use `/deploy` in Claude Code.
 | `GOOGLE_CLOUD_PROJECT` | GCP project ID | (required) |
 | `CLOUD_RUN_SERVICE` | Service name | (required) |
 | `CLOUD_RUN_REGION` | Region | `us-central1` |
+
+#### GCP Cloud Functions
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID | (required) |
+| `CLOUD_FUNCTION_NAME` | Function name | (required) |
+| `CLOUD_FUNCTIONS_REGION` | Region | `us-central1` |
+| `GCP_FUNCTION_GEN` | Generation (1 or 2) | `2` |
+| `GCP_FUNCTION_RUNTIME` | Runtime | `nodejs20` |
+| `GCP_FUNCTION_TRIGGER` | Trigger type | `http` |
 
 #### Firebase Functions
 | Variable | Description | Default |
