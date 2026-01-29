@@ -386,22 +386,217 @@ Exit codes:
 4. **Keep `.env` files out of git** (they contain secrets!)
 5. **Use Secret Manager** for sensitive values, not plain env vars
 
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| **macOS** | ✅ Full | Native bash, tested on 10.15+ |
+| **Linux** | ✅ Full | All major distros |
+| **Windows (WSL2)** | ✅ Full | Recommended for Windows |
+| **Windows (Git Bash)** | ✅ Works | Included with Git for Windows |
+| **Windows (native)** | ❌ No | Use WSL2 or Git Bash |
+
+## Windows Setup Guide
+
+This hook requires a bash environment. Windows users have two excellent options:
+
+### Option 1: WSL2 (Recommended)
+
+WSL2 (Windows Subsystem for Linux) provides a full Linux environment inside Windows. This is the best option for developers.
+
+#### Installing WSL2
+
+1. **Open PowerShell as Administrator** and run:
+   ```powershell
+   wsl --install
+   ```
+
+2. **Restart your computer** when prompted
+
+3. **Set up Ubuntu** (or your preferred distro):
+   - A terminal window will open after restart
+   - Create a username and password
+   - You now have a full Linux environment!
+
+4. **Install required tools** in WSL2:
+   ```bash
+   # Update packages
+   sudo apt update && sudo apt upgrade -y
+
+   # Install jq (required)
+   sudo apt install -y jq
+
+   # Install cloud CLIs as needed
+   # GCP: https://cloud.google.com/sdk/docs/install
+   # AWS: sudo apt install -y awscli
+   # Azure: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-linux
+   ```
+
+5. **Access your Windows files** from WSL2:
+   ```bash
+   # Your C: drive is at /mnt/c/
+   cd /mnt/c/Users/YourUsername/Projects/your-project
+   ```
+
+6. **Install the hook**:
+   ```bash
+   git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
+   chmod +x .claude/hooks/deploy.sh .claude/hooks/lib/*.sh .claude/hooks/providers/*.sh
+   ```
+
+#### Using Claude Code with WSL2
+
+When using Claude Code on Windows with WSL2:
+
+1. **Open your project in WSL2**:
+   ```bash
+   cd /mnt/c/Users/YourUsername/Projects/your-project
+   ```
+
+2. **Run Claude Code from WSL2 terminal** (if using CLI version)
+
+3. **Or configure VS Code** to use WSL2:
+   - Install the "Remote - WSL" extension
+   - Click the green button in bottom-left → "New WSL Window"
+   - Open your project folder
+
+### Option 2: Git Bash
+
+Git Bash comes bundled with [Git for Windows](https://git-scm.com/download/win) and provides a bash environment.
+
+#### Installing Git Bash
+
+1. **Download Git for Windows**: https://git-scm.com/download/win
+
+2. **Run the installer** with these recommended options:
+   - ✅ Git Bash Here (adds right-click menu)
+   - ✅ Use Git from the Windows Command Prompt
+   - ✅ Use bundled OpenSSH
+   - ✅ Use MinTTY terminal
+
+3. **Install jq for Git Bash**:
+   ```bash
+   # Download jq
+   curl -L -o /usr/bin/jq.exe https://github.com/stedolan/jq/releases/latest/download/jq-win64.exe
+   ```
+
+4. **Install the hook**:
+   ```bash
+   # Right-click in your project folder → "Git Bash Here"
+   git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
+   ```
+
+#### Git Bash Limitations
+
+Git Bash works well but has some limitations compared to WSL2:
+
+| Feature | Git Bash | WSL2 |
+|---------|----------|------|
+| Basic deployment | ✅ | ✅ |
+| Environment variables | ✅ | ✅ |
+| Interactive prompts | ✅ | ✅ |
+| Complex shell scripts | ⚠️ Some issues | ✅ |
+| Native Linux tools | ❌ | ✅ |
+| Performance | Good | Excellent |
+
+### Windows PATH Configuration
+
+Some cloud CLIs need to be accessible from bash. Add them to your PATH:
+
+#### For WSL2
+Add to `~/.bashrc`:
+```bash
+# If using Windows-installed CLIs (not recommended, install in WSL instead)
+export PATH="$PATH:/mnt/c/Program Files/Google/Cloud SDK/google-cloud-sdk/bin"
+```
+
+#### For Git Bash
+The Windows PATH is usually inherited. If not, add to `~/.bashrc`:
+```bash
+export PATH="$PATH:/c/Program Files/Google/Cloud SDK/google-cloud-sdk/bin"
+export PATH="$PATH:/c/Program Files/nodejs"
+```
+
+### Troubleshooting Windows Issues
+
+#### "Command not found" errors
+```bash
+# Check if the command is in PATH
+which gcloud  # or aws, kubectl, etc.
+
+# If not found, install in WSL2:
+# GCP: curl https://sdk.cloud.google.com | bash
+# AWS: sudo apt install awscli
+```
+
+#### Line ending issues (CRLF vs LF)
+```bash
+# If you see errors like "^M: command not found"
+# Fix line endings:
+sed -i 's/\r$//' .claude/hooks/*.sh
+sed -i 's/\r$//' .claude/hooks/lib/*.sh
+sed -i 's/\r$//' .claude/hooks/providers/*.sh
+
+# Prevent future issues - configure git:
+git config --global core.autocrlf input
+```
+
+#### Permission denied errors
+```bash
+# Make scripts executable
+chmod +x .claude/hooks/deploy.sh
+chmod +x .claude/hooks/lib/*.sh
+chmod +x .claude/hooks/providers/*.sh
+```
+
+#### WSL2 can't find Windows files
+```bash
+# Windows drives are mounted at /mnt/
+ls /mnt/c/  # C: drive
+ls /mnt/d/  # D: drive
+
+# Your user folder:
+cd /mnt/c/Users/$USER/
+```
+
+### Windows Quick Start Checklist
+
+- [ ] Install WSL2 (`wsl --install`) or Git for Windows
+- [ ] Install `jq` in your bash environment
+- [ ] Install cloud provider CLIs (gcloud, aws, etc.)
+- [ ] Clone the hook into your project
+- [ ] Make scripts executable with `chmod +x`
+- [ ] Configure `.claude/settings.json`
+- [ ] Test with `./deploy.sh --help`
+
 ## Requirements
 
-- Bash 4.0+
-- `jq` for JSON parsing
-- `curl` for API calls
-- Provider-specific CLI tools:
-  - GCP: `gcloud`, `firebase`
-  - AWS: `aws`, `sam`, `serverless` (optional)
-  - Azure: `az`, `func`
-  - Vercel: `vercel`
-  - Cloudflare: `wrangler`
-  - Railway: `railway`
-  - Kubernetes: `kubectl`, `helm` (optional)
-  - Heroku: `heroku`
-  - Fly.io: `flyctl`
-  - Netlify: `netlify`
+### System Requirements
+- **Bash 3.2+** (macOS default) or **Bash 4.0+** (Linux, WSL2)
+- **jq** - JSON parsing (install: `brew install jq` / `apt install jq`)
+- **curl** - HTTP requests (usually pre-installed)
+
+### Provider-Specific CLIs
+
+Install only the CLIs for providers you use:
+
+| Provider | CLI | Install Command |
+|----------|-----|-----------------|
+| GCP | `gcloud` | [cloud.google.com/sdk](https://cloud.google.com/sdk/docs/install) |
+| Firebase | `firebase` | `npm install -g firebase-tools` |
+| AWS | `aws` | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
+| AWS SAM | `sam` | [docs.aws.amazon.com/sam](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) |
+| Azure | `az` | [docs.microsoft.com/cli/azure](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) |
+| Azure Functions | `func` | `npm install -g azure-functions-core-tools@4` |
+| Vercel | `vercel` | `npm install -g vercel` |
+| Cloudflare | `wrangler` | `npm install -g wrangler` |
+| Railway | `railway` | `npm install -g @railway/cli` |
+| Kubernetes | `kubectl` | [kubernetes.io/docs/tasks/tools](https://kubernetes.io/docs/tasks/tools/) |
+| Helm | `helm` | [helm.sh/docs/intro/install](https://helm.sh/docs/intro/install/) |
+| Heroku | `heroku` | `npm install -g heroku` |
+| Fly.io | `flyctl` | [fly.io/docs/hands-on/install-flyctl](https://fly.io/docs/hands-on/install-flyctl/) |
+| Netlify | `netlify` | `npm install -g netlify-cli` |
+| Render | - | Uses API (no CLI needed) |
 
 ## Testing
 
