@@ -2,17 +2,22 @@
 # Claude Deploy Hook - Universal Deployment with Smart Env Var Management
 # https://github.com/sterlingsky/claude-deploy-hook
 #
-# Supports multiple cloud providers with modular architecture:
-# - GCP Cloud Run, Firebase Functions
-# - Vercel, Cloudflare Workers/Pages, Railway
-# - Easily extensible for custom providers
+# SECURITY FEATURES:
+# - Never prints env var values (only key names and lengths)
+# - Secure temp files with 600 permissions
+# - Shred temp files on cleanup
+# - --strict mode for CI/CD (fails on unknown vars)
+# - No eval of user-controlled strings
 
 set -e
 
 # Determine script location (works even when symlinked)
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+
+# Create secure temp directory
 TEMP_DIR=$(mktemp -d)
+chmod 700 "$TEMP_DIR"
 
 # Source shared library
 if [ -f "$SCRIPT_DIR/lib/env-compare.sh" ]; then
@@ -22,10 +27,17 @@ else
   exit 1
 fi
 
+# Secure cleanup - shred temp files if possible
 cleanup() {
-  rm -rf "$TEMP_DIR"
+  if [ -d "$TEMP_DIR" ]; then
+    # Securely delete all files in temp dir
+    for f in "$TEMP_DIR"/*; do
+      [ -f "$f" ] && secure_delete "$f"
+    done
+    rmdir "$TEMP_DIR" 2>/dev/null || rm -rf "$TEMP_DIR"
+  fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # Show usage
 usage() {
@@ -39,18 +51,25 @@ Options:
   --list-providers   List available providers
   --dry-run          Show what would be deployed without deploying
   --env-file=PATH    Use specific env file (auto-detects if not set)
+  --strict           Fail if there are env vars to remove (for CI/CD)
   --help             Show this help
 
 Environment Variables:
   DEPLOY_PROVIDER    Same as --provider
   DEPLOY_ENV_FILE    Same as --env-file
   DEPLOY_DRY_RUN     Set to 1 for dry run
+  DEPLOY_STRICT      Set to 1 for strict mode
+
+Security:
+  - Env var values are NEVER printed (only key names and lengths)
+  - Temp files are created with 600 permissions and shredded on exit
+  - Use --strict in CI/CD to fail on unknown vars instead of keeping them
 
 Examples:
   deploy.sh                              # Auto-detect and deploy
   deploy.sh --provider=gcp-cloud-run     # Use specific provider
   deploy.sh --dry-run                    # Preview changes
-  deploy.sh --env-file=.env.staging      # Use specific env file
+  deploy.sh --strict                     # Fail on unknown vars (CI/CD)
 
 For provider-specific variables, run: deploy.sh --list-providers
 EOF
@@ -108,6 +127,7 @@ load_provider() {
 PROVIDER=""
 DRY_RUN="${DEPLOY_DRY_RUN:-0}"
 ENV_FILE="${DEPLOY_ENV_FILE:-}"
+STRICT_MODE="${DEPLOY_STRICT:-0}"
 
 for arg in "$@"; do
   case $arg in
@@ -124,6 +144,9 @@ for arg in "$@"; do
     --env-file=*)
       ENV_FILE="${arg#*=}"
       ;;
+    --strict)
+      STRICT_MODE=1
+      ;;
     --help|-h)
       usage
       exit 0
@@ -136,11 +159,16 @@ for arg in "$@"; do
   esac
 done
 
+# Export STRICT_MODE for use in env-compare.sh
+export STRICT_MODE
+
 # Header
 echo -e "${BLUE}╔══════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║    Claude Deploy Hook                    ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════╝${NC}"
 echo ""
+
+[ "$STRICT_MODE" = "1" ] && echo -e "${YELLOW}STRICT MODE enabled - will fail on unknown vars${NC}" && echo ""
 
 # Detect or use specified provider
 if [ -z "$PROVIDER" ]; then
@@ -176,12 +204,14 @@ if ! service_exists 2>/dev/null; then
   echo -e "${YELLOW}Service doesn't exist yet. Will create new deployment.${NC}"
   LIVE_ENV_COUNT=0
   touch "$TEMP_DIR/live_env.txt"
+  chmod 600 "$TEMP_DIR/live_env.txt"
   LIVE_SECRETS=""
 else
   # Fetch live config
   echo -e "${BLUE}Fetching live configuration...${NC}"
 
   fetch_live_env > "$TEMP_DIR/live_env.txt" 2>/dev/null || touch "$TEMP_DIR/live_env.txt"
+  chmod 600 "$TEMP_DIR/live_env.txt"
   LIVE_SECRETS=$(fetch_live_secrets 2>/dev/null || echo "")
 
   LIVE_ENV_COUNT=$(wc -l < "$TEMP_DIR/live_env.txt" | tr -d ' ')
@@ -195,6 +225,7 @@ if [ -z "$ENV_FILE" ]; then
   ENV_FILE=$(find_local_env_file "$PROJECT_DIR") || {
     echo -e "${YELLOW}No local .env file found. Using live config only.${NC}"
     touch "$TEMP_DIR/local_env.txt"
+    chmod 600 "$TEMP_DIR/local_env.txt"
   }
 fi
 
@@ -205,6 +236,7 @@ if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
   echo -e "${GREEN}Found $LOCAL_ENV_COUNT env vars in local file${NC}"
 else
   touch "$TEMP_DIR/local_env.txt"
+  chmod 600 "$TEMP_DIR/local_env.txt"
 fi
 
 # Compare environments
@@ -212,7 +244,7 @@ echo ""
 echo -e "${BLUE}=== Comparing Env Vars ===${NC}"
 compare_env_vars "$TEMP_DIR/live_env.txt" "$TEMP_DIR/local_env.txt"
 
-# Handle removals
+# Handle removals (may exit with code 3 in strict mode)
 handle_removals
 
 # Merge vars
@@ -231,7 +263,7 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "Would deploy with:"
   [ -n "$FINAL_ENV_VARS" ] && echo "  Env vars: $(echo "$FINAL_ENV_VARS" | tr ',' '\n' | wc -l | tr -d ' ') variables"
   [ -n "$LIVE_SECRETS" ] && echo "  Secrets: $(echo "$LIVE_SECRETS" | tr ',' '\n' | grep -c . || echo 0) secrets"
-  [ -n "$VARS_TO_REMOVE" ] && echo "  Remove: $VARS_TO_REMOVE"
+  [ -n "$VARS_TO_REMOVE" ] && echo "  Remove: $(echo "$VARS_TO_REMOVE" | tr ',' '\n' | wc -l | tr -d ' ') variables"
   exit 0
 fi
 
@@ -239,6 +271,7 @@ fi
 echo ""
 echo -e "${BLUE}=== Deploying ===${NC}"
 
+# Call provider's deploy function (provider handles command construction safely)
 if deploy "$FINAL_ENV_VARS" "$LIVE_SECRETS" "$VARS_TO_REMOVE" "$PROJECT_DIR"; then
   echo ""
   echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"

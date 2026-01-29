@@ -254,6 +254,46 @@ See the `examples/` directory for sample configurations:
 - `examples/vercel-nextjs/` - Next.js on Vercel
 - `examples/cloudflare-workers/` - Cloudflare Workers API
 
+## Security
+
+This hook is designed with security in mind:
+
+### What We Protect Against
+
+| Threat | Mitigation |
+|--------|------------|
+| **Secrets in logs** | Env var values are NEVER printed - only key names and character lengths |
+| **Temp file exposure** | Temp files use 600 permissions and are shredded on exit |
+| **Command injection** | Array-based command construction (no `eval` of user data) |
+| **Unknown var persistence** | `--strict` mode fails on vars not in local .env |
+| **Accidental deletions** | Interactive prompt before removing vars; keeps all by default |
+
+### Strict Mode for CI/CD
+
+In CI/CD pipelines, use `--strict` to fail if there are env vars in the live service that aren't defined in your local `.env`:
+
+```bash
+deploy.sh --strict
+```
+
+This prevents:
+- Accidental preservation of vars added by attackers
+- Drift between your code and deployed configuration
+- Surprise vars that you don't know about
+
+Exit codes:
+- `0` - Success
+- `2` - Deployment failed
+- `3` - Strict mode violation (unknown vars detected)
+
+### Best Practices
+
+1. **Always use `--dry-run` first** to preview changes
+2. **Use `--strict` in CI/CD** to enforce env var hygiene
+3. **Review vars marked for removal** before confirming deletion
+4. **Keep `.env` files out of git** (they contain secrets!)
+5. **Use Secret Manager** for sensitive values, not plain env vars
+
 ## Requirements
 
 - Bash 4.0+

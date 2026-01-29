@@ -1,6 +1,8 @@
 #!/bin/bash
 # GCP Cloud Run Provider
 # Implements: fetch_live_env, fetch_live_secrets, deploy, detect
+#
+# SECURITY: Uses array-based command construction to avoid eval
 
 # Provider metadata
 PROVIDER_NAME="GCP Cloud Run"
@@ -82,21 +84,26 @@ fetch_live_secrets() {
 
 # Deploy to Cloud Run
 # Args: env_vars secrets vars_to_remove source_dir
+# SECURITY: Uses array-based command construction instead of eval
 deploy() {
   local env_vars="$1"
   local secrets="$2"
   local vars_to_remove="$3"
   local source_dir="$4"
 
-  local cmd="gcloud run deploy $GCP_SERVICE"
-  cmd="$cmd --project $GCP_PROJECT"
-  cmd="$cmd --region $GCP_REGION"
-  cmd="$cmd --source $source_dir"
-  cmd="$cmd --platform managed"
+  # Build command as array to avoid eval
+  local -a cmd=(
+    gcloud run deploy "$GCP_SERVICE"
+    --project "$GCP_PROJECT"
+    --region "$GCP_REGION"
+    --source "$source_dir"
+    --platform managed
+  )
 
-  [ -n "$env_vars" ] && cmd="$cmd --set-env-vars=\"$env_vars\""
-  [ -n "$secrets" ] && cmd="$cmd --set-secrets=\"$secrets\""
-  [ -n "$vars_to_remove" ] && cmd="$cmd --remove-env-vars=\"$vars_to_remove\""
+  # Add optional arguments
+  [ -n "$env_vars" ] && cmd+=(--set-env-vars "$env_vars")
+  [ -n "$secrets" ] && cmd+=(--set-secrets "$secrets")
+  [ -n "$vars_to_remove" ] && cmd+=(--remove-env-vars "$vars_to_remove")
 
   echo -e "${BLUE}Deploying to Cloud Run...${NC}"
   echo "  Project: $GCP_PROJECT"
@@ -104,7 +111,8 @@ deploy() {
   echo "  Region:  $GCP_REGION"
   echo ""
 
-  eval $cmd
+  # Execute command directly from array (no eval needed)
+  "${cmd[@]}"
 }
 
 # Print provider-specific info

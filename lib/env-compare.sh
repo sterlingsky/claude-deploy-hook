@@ -1,6 +1,9 @@
 #!/bin/bash
 # Shared environment variable comparison library
 # Sourced by deploy.sh - do not run directly
+#
+# SECURITY: This library never prints env var values to prevent
+# accidental exposure in logs or terminal history.
 
 # Colors
 RED='\033[0;31m'
@@ -10,8 +13,31 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Secure temp file creation with restrictive permissions
+create_secure_temp() {
+  local tmpfile
+  tmpfile=$(mktemp) || return 1
+  chmod 600 "$tmpfile"
+  echo "$tmpfile"
+}
+
+# Secure cleanup - shred if available, otherwise overwrite + remove
+secure_delete() {
+  local file="$1"
+  if [ -f "$file" ]; then
+    if command -v shred &>/dev/null; then
+      shred -u "$file" 2>/dev/null || rm -f "$file"
+    else
+      # Overwrite with zeros before deletion
+      dd if=/dev/zero of="$file" bs=1k count=10 2>/dev/null || true
+      rm -f "$file"
+    fi
+  fi
+}
+
 # Compare environment variables between live and local
 # Sets: VARS_TO_ADD, VARS_TO_UPDATE, VARS_TO_REMOVE, VARS_UNCHANGED
+# SECURITY: Never prints actual values
 compare_env_vars() {
   local live_file="$1"
   local local_file="$2"
@@ -47,9 +73,12 @@ compare_env_vars() {
       [ -n "$VARS_TO_ADD" ] && VARS_TO_ADD="$VARS_TO_ADD,"
       VARS_TO_ADD="$VARS_TO_ADD$key=${LOCAL_VARS[$key]}"
     elif [ "${LIVE_VARS[$key]}" != "${LOCAL_VARS[$key]}" ]; then
+      # SECURITY: Don't print actual values - just indicate change
+      local live_len=${#LIVE_VARS[$key]}
+      local local_len=${#LOCAL_VARS[$key]}
       echo -e "${YELLOW}~ UPDATE:${NC} $key"
-      echo "    Live:  ${LIVE_VARS[$key]:0:50}$([ ${#LIVE_VARS[$key]} -gt 50 ] && echo '...')"
-      echo "    Local: ${LOCAL_VARS[$key]:0:50}$([ ${#LOCAL_VARS[$key]} -gt 50 ] && echo '...')"
+      echo "    Live:  [${live_len} chars]"
+      echo "    Local: [${local_len} chars]"
       [ -n "$VARS_TO_UPDATE" ] && VARS_TO_UPDATE="$VARS_TO_UPDATE,"
       VARS_TO_UPDATE="$VARS_TO_UPDATE$key=${LOCAL_VARS[$key]}"
     else
@@ -67,6 +96,7 @@ compare_env_vars() {
 
 # Handle removal candidates with user confirmation
 # Sets: VARS_TO_REMOVE or adds to VARS_TO_UPDATE to preserve
+# SECURITY: Never prints actual values
 handle_removals() {
   if [ ${#REMOVAL_CANDIDATES[@]} -eq 0 ]; then
     return 0
@@ -75,9 +105,19 @@ handle_removals() {
   echo ""
   echo -e "${RED}=== Vars in live service but NOT in local .env ===${NC}"
   for key in "${REMOVAL_CANDIDATES[@]}"; do
-    echo -e "${RED}- REMOVE?:${NC} $key=${LIVE_VARS[$key]:0:50}$([ ${#LIVE_VARS[$key]} -gt 50 ] && echo '...')"
+    # SECURITY: Don't print values - just show key name and length
+    local val_len=${#LIVE_VARS[$key]}
+    echo -e "${RED}- REMOVE?:${NC} $key [${val_len} chars]"
   done
   echo ""
+
+  # Strict mode check
+  if [ "${STRICT_MODE:-0}" = "1" ]; then
+    echo -e "${RED}STRICT MODE: Failing due to env vars pending removal${NC}"
+    echo "In strict mode, all env vars must be explicitly defined in local .env"
+    echo "Either add these vars to your local .env or remove them from live service manually."
+    exit 3
+  fi
 
   # Check if interactive
   if [ -t 0 ]; then
@@ -112,6 +152,7 @@ handle_removals() {
     esac
   else
     echo -e "${YELLOW}Non-interactive mode: Keeping all existing vars (safe default)${NC}"
+    echo -e "${YELLOW}Use --strict to fail instead of keeping unknown vars${NC}"
     for key in "${REMOVAL_CANDIDATES[@]}"; do
       [ -n "$VARS_TO_UPDATE" ] && VARS_TO_UPDATE="$VARS_TO_UPDATE,"
       VARS_TO_UPDATE="$VARS_TO_UPDATE$key=${LIVE_VARS[$key]}"
@@ -129,7 +170,7 @@ merge_env_vars() {
   }
 }
 
-# Print deployment summary
+# Print deployment summary (no sensitive data)
 print_summary() {
   local secrets="$1"
 
@@ -163,7 +204,17 @@ parse_env_file() {
 
   if [ -f "$file" ]; then
     grep -v '^#' "$file" | grep -v '^[[:space:]]*$' | grep '=' > "$output" 2>/dev/null || touch "$output"
+    chmod 600 "$output"  # Secure the output file
   else
     touch "$output"
+    chmod 600 "$output"
   fi
+}
+
+# Sanitize a value for safe shell usage (escape special chars)
+# Use this when building command arguments
+sanitize_value() {
+  local val="$1"
+  # Use printf %q to safely quote the value
+  printf '%q' "$val"
 }
