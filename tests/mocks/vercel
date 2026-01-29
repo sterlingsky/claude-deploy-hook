@@ -1,0 +1,44 @@
+#!/bin/bash
+# Mock vercel CLI for testing
+
+CMD="$1"
+shift
+
+case "$CMD" in
+  env)
+    SUBCMD="$1"
+    shift
+    case "$SUBCMD" in
+      ls)
+        echo "  Environment Variables for production"
+        echo ""
+        echo "  API_KEY         Encrypted   production"
+        echo "  DATABASE_URL    Encrypted   production"
+        echo "  OLD_VAR         Plain       production"
+        exit 0
+        ;;
+      add)
+        echo "✓ Added environment variable $1"
+        exit 0
+        ;;
+      rm)
+        echo "✓ Removed environment variable $1"
+        exit 0
+        ;;
+    esac
+    ;;
+  inspect)
+    echo "Deployment: https://my-app.vercel.app"
+    exit 0
+    ;;
+  --prod|"")
+    echo "🔍  Inspect: https://vercel.com/team/my-app/abc123"
+    echo "✅  Production: https://my-app.vercel.app"
+    exit 0
+    ;;
+esac
+
+# Default deploy
+echo "🔍  Inspect: https://vercel.com/team/my-app/abc123"
+echo "✅  Production: https://my-app.vercel.app"
+exit 0

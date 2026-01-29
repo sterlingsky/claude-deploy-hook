@@ -403,6 +403,59 @@ Exit codes:
   - Fly.io: `flyctl`
   - Netlify: `netlify`
 
+## Testing
+
+The project includes a comprehensive test suite using [BATS](https://github.com/bats-core/bats-core) (Bash Automated Testing System).
+
+### Running Tests
+
+```bash
+# Run all tests
+./tests/run_tests.sh
+
+# Run with verbose output
+./tests/run_tests.sh -v
+
+# Run specific test file
+./tests/run_tests.sh tests/provider_detection.bats
+```
+
+### Test Structure
+
+```
+tests/
+├── run_tests.sh           # Test runner
+├── test_helper.bash       # Shared test utilities
+├── provider_detection.bats # Provider auto-detection tests
+├── env_comparison.bats    # Env var comparison tests
+├── deploy_hook.bats       # Main deploy.sh tests
+├── mocks/                 # Mock CLI tools
+│   ├── aws
+│   ├── gcloud
+│   ├── firebase
+│   ├── kubectl
+│   ├── vercel
+│   ├── heroku
+│   ├── flyctl
+│   └── curl
+└── fixtures/              # Test fixtures
+```
+
+### Testing Without Cloud Accounts
+
+The test suite uses mock CLI tools that simulate real responses. This allows you to:
+
+1. **Test provider detection** - Verify projects are correctly identified
+2. **Test env var comparison** - Verify add/update/remove logic
+3. **Test security features** - Verify secrets aren't leaked
+4. **Test dry-run mode** - Verify no actual deployments occur
+
+### Adding Tests for New Providers
+
+1. Create a mock CLI in `tests/mocks/your-cli`
+2. Add detection tests to `provider_detection.bats`
+3. Add a project creation helper to `test_helper.bash`
+
 ## License
 
 MIT License - see [LICENSE](LICENSE)

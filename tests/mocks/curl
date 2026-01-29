@@ -1,0 +1,65 @@
+#!/bin/bash
+# Mock curl for testing API-based providers (Render, etc.)
+
+# Parse URL from arguments
+URL=""
+METHOD="GET"
+for arg in "$@"; do
+  case "$arg" in
+    -X)
+      shift
+      METHOD="$1"
+      ;;
+    https://*)
+      URL="$arg"
+      ;;
+    http://*)
+      URL="$arg"
+      ;;
+  esac
+done
+
+# Render API mocks
+if [[ "$URL" == *"api.render.com"* ]]; then
+  if [[ "$URL" == *"/env-vars"* ]]; then
+    if [[ "$METHOD" == "GET" ]] || [[ -z "$METHOD" ]]; then
+      cat << 'MOCKJSON'
+[
+  {"key": "API_KEY", "value": "live_api_key_456"},
+  {"key": "DATABASE_URL", "value": "postgres://prod/mydb"},
+  {"key": "OLD_VAR", "value": "should_be_removed"}
+]
+MOCKJSON
+    else
+      echo '{"success": true}'
+    fi
+    exit 0
+  elif [[ "$URL" == *"/deploys"* ]]; then
+    echo '{"id": "deploy-abc123", "status": "created"}'
+    exit 0
+  elif [[ "$URL" == *"/services/"* ]]; then
+    echo '{"id": "srv-abc123", "name": "my-service"}'
+    exit 0
+  fi
+fi
+
+# Cloudflare API mocks
+if [[ "$URL" == *"api.cloudflare.com"* ]]; then
+  if [[ "$URL" == *"/settings"* ]]; then
+    cat << 'MOCKJSON'
+{
+  "result": {
+    "bindings": [
+      {"type": "plain_text", "name": "API_KEY", "text": "live_api_key_456"},
+      {"type": "secret_text", "name": "SECRET_KEY"}
+    ]
+  }
+}
+MOCKJSON
+    exit 0
+  fi
+fi
+
+# Default - pass through or return empty
+echo '{}'
+exit 0

@@ -1,0 +1,92 @@
+#!/bin/bash
+# Mock AWS CLI for testing
+
+SERVICE="$1"
+shift
+CMD="$1"
+shift
+
+case "$SERVICE" in
+  lambda)
+    case "$CMD" in
+      get-function)
+        echo '{"Configuration": {"FunctionName": "my-function"}}'
+        exit 0
+        ;;
+      get-function-configuration)
+        cat << 'MOCKJSON'
+{
+  "FunctionName": "my-function",
+  "Runtime": "nodejs18.x",
+  "Environment": {
+    "Variables": {
+      "API_KEY": "live_api_key_456",
+      "DATABASE_URL": "postgres://prod/mydb",
+      "OLD_VAR": "should_be_removed"
+    }
+  }
+}
+MOCKJSON
+        exit 0
+        ;;
+      update-function-configuration)
+        echo '{"FunctionName": "my-function", "LastUpdateStatus": "Successful"}'
+        exit 0
+        ;;
+      update-function-code)
+        echo '{"FunctionName": "my-function", "CodeSha256": "abc123"}'
+        exit 0
+        ;;
+    esac
+    ;;
+  ecs)
+    case "$CMD" in
+      describe-services)
+        cat << 'MOCKJSON'
+{
+  "services": [{
+    "serviceName": "my-service",
+    "taskDefinition": "arn:aws:ecs:us-east-1:123456789:task-definition/my-task:1"
+  }]
+}
+MOCKJSON
+        exit 0
+        ;;
+      describe-task-definition)
+        cat << 'MOCKJSON'
+{
+  "taskDefinition": {
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:123456789:task-definition/my-task:1",
+    "family": "my-task",
+    "containerDefinitions": [{
+      "name": "my-container",
+      "environment": [
+        {"name": "API_KEY", "value": "live_api_key_456"},
+        {"name": "DATABASE_URL", "value": "postgres://prod/mydb"}
+      ],
+      "secrets": [
+        {"name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789:secret:db-password"}
+      ]
+    }]
+  }
+}
+MOCKJSON
+        exit 0
+        ;;
+      register-task-definition)
+        echo '{"taskDefinition": {"taskDefinitionArn": "arn:aws:ecs:us-east-1:123456789:task-definition/my-task:2"}}'
+        exit 0
+        ;;
+      update-service)
+        echo '{"service": {"serviceName": "my-service", "deployments": [{"status": "PRIMARY"}]}}'
+        exit 0
+        ;;
+      wait)
+        exit 0
+        ;;
+    esac
+    ;;
+esac
+
+echo "Mock aws: unknown command $SERVICE $CMD"
+exit 1

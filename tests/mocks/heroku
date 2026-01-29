@@ -1,0 +1,42 @@
+#!/bin/bash
+# Mock heroku CLI for testing
+
+CMD="$1"
+shift
+
+case "$CMD" in
+  config)
+    if [[ "$1" == "--shell" ]] || [[ "$*" == *"--shell"* ]]; then
+      echo "API_KEY=live_api_key_456"
+      echo "DATABASE_URL=postgres://prod/mydb"
+      echo "OLD_VAR=should_be_removed"
+    else
+      echo "=== my-app Config Vars"
+      echo "API_KEY:      live_api_key_456"
+      echo "DATABASE_URL: postgres://prod/mydb"
+      echo "OLD_VAR:      should_be_removed"
+    fi
+    exit 0
+    ;;
+  config:set)
+    echo "Setting $1 and restarting ⬢ my-app... done"
+    exit 0
+    ;;
+  config:unset)
+    echo "Unsetting $1 and restarting ⬢ my-app... done"
+    exit 0
+    ;;
+  apps:info)
+    echo "=== my-app"
+    echo "Git URL:       https://git.heroku.com/my-app.git"
+    echo "Web URL:       https://my-app.herokuapp.com/"
+    exit 0
+    ;;
+  git:remote)
+    echo "set git remote heroku to https://git.heroku.com/my-app.git"
+    exit 0
+    ;;
+esac
+
+echo "Mock heroku: command $CMD executed"
+exit 0

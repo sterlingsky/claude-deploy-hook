@@ -1,0 +1,103 @@
+#!/bin/bash
+# Mock gcloud CLI for testing
+
+# Parse command
+CMD="$1"
+shift
+
+case "$CMD" in
+  run)
+    SUBCMD="$1"
+    shift
+    case "$SUBCMD" in
+      deploy)
+        echo "Deploying service $1..."
+        echo "✓ Deploying new service revision"
+        echo "✓ Routing traffic to latest revision"
+        echo "Service URL: https://my-service-abc123-uc.a.run.app"
+        exit 0
+        ;;
+      services)
+        SUBSUB="$1"
+        shift
+        case "$SUBSUB" in
+          describe)
+            SERVICE_NAME="$1"
+            # Return mock service config
+            cat << 'MOCKJSON'
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [{
+          "env": [
+            {"name": "API_KEY", "value": "live_api_key_456"},
+            {"name": "DATABASE_URL", "value": "postgres://prod/mydb"},
+            {"name": "OLD_VAR", "value": "should_be_removed"}
+          ]
+        }]
+      }
+    }
+  }
+}
+MOCKJSON
+            exit 0
+            ;;
+          list)
+            echo "my-service"
+            exit 0
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+  functions)
+    SUBCMD="$1"
+    shift
+    case "$SUBCMD" in
+      deploy)
+        echo "Deploying function $1..."
+        echo "✓ Function deployed successfully"
+        exit 0
+        ;;
+      describe)
+        FUNC_NAME="$1"
+        # Check for --gen2 flag
+        if [[ "$*" == *"--gen2"* ]]; then
+          cat << 'MOCKJSON'
+{
+  "serviceConfig": {
+    "environmentVariables": {
+      "API_KEY": "live_api_key_456",
+      "DATABASE_URL": "postgres://prod/mydb"
+    }
+  }
+}
+MOCKJSON
+        else
+          cat << 'MOCKJSON'
+{
+  "environmentVariables": {
+    "API_KEY": "live_api_key_456",
+    "DATABASE_URL": "postgres://prod/mydb"
+  }
+}
+MOCKJSON
+        fi
+        exit 0
+        ;;
+      list)
+        echo "my-function"
+        exit 0
+        ;;
+    esac
+    ;;
+  config)
+    # Config commands
+    exit 0
+    ;;
+  *)
+    echo "Mock gcloud: unknown command $CMD"
+    exit 1
+    ;;
+esac

@@ -1,0 +1,53 @@
+#!/bin/bash
+# Mock firebase CLI for testing
+
+CMD="$1"
+shift
+
+case "$CMD" in
+  deploy)
+    echo "=== Deploying to Firebase ==="
+    echo ""
+    echo "i  deploying functions"
+    echo "✔  functions: Finished running predeploy script."
+    echo "i  functions: preparing functions directory for uploading..."
+    echo "✔  functions: functions folder uploaded successfully"
+    echo "i  functions: creating Node.js 18 function my-function..."
+    echo "✔  functions[my-function]: Successful create operation."
+    echo ""
+    echo "✔  Deploy complete!"
+    exit 0
+    ;;
+  functions:config:get)
+    # Return mock config for Gen 1 functions
+    cat << 'MOCKJSON'
+{
+  "service": {
+    "api_key": "live_api_key_456",
+    "database_url": "postgres://prod/mydb"
+  }
+}
+MOCKJSON
+    exit 0
+    ;;
+  functions:config:set)
+    echo "✔  Functions config updated."
+    exit 0
+    ;;
+  functions:config:unset)
+    echo "✔  Functions config removed."
+    exit 0
+    ;;
+  functions:list)
+    echo "┌─────────────────┬─────────┬─────────────┐"
+    echo "│ Function        │ Trigger │ Location    │"
+    echo "├─────────────────┼─────────┼─────────────┤"
+    echo "│ my-function     │ https   │ us-central1 │"
+    echo "└─────────────────┴─────────┴─────────────┘"
+    exit 0
+    ;;
+  *)
+    echo "Mock firebase: unknown command $CMD"
+    exit 1
+    ;;
+esac

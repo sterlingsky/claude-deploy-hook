@@ -1,0 +1,56 @@
+#!/bin/bash
+# Mock flyctl CLI for testing
+
+CMD="$1"
+shift
+
+case "$CMD" in
+  secrets)
+    SUBCMD="$1"
+    shift
+    case "$SUBCMD" in
+      list)
+        echo "NAME          DIGEST                  CREATED AT"
+        echo "API_KEY       abc123                  1h ago"
+        echo "DATABASE_URL  def456                  1h ago"
+        echo "OLD_VAR       ghi789                  1d ago"
+        exit 0
+        ;;
+      set)
+        echo "Secrets are staged for the next deployment"
+        exit 0
+        ;;
+      unset)
+        echo "Secrets are staged for removal"
+        exit 0
+        ;;
+    esac
+    ;;
+  apps)
+    SUBCMD="$1"
+    shift
+    case "$SUBCMD" in
+      list)
+        echo "NAME          OWNER           STATUS          PLATFORM"
+        echo "my-fly-app    personal        deployed        machines"
+        exit 0
+        ;;
+    esac
+    ;;
+  deploy)
+    echo "==> Verifying app config"
+    echo "--> Verified app config"
+    echo "==> Building image"
+    echo "--> Building image done"
+    echo "==> Pushing image"
+    echo "--> Pushing image done"
+    echo "==> Creating release"
+    echo "--> Release v1 created"
+    echo ""
+    echo "Visit your newly deployed app at https://my-fly-app.fly.dev/"
+    exit 0
+    ;;
+esac
+
+echo "Mock flyctl: command $CMD executed"
+exit 0
