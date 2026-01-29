@@ -22,6 +22,7 @@ A universal deployment hook for [Claude Code](https://claude.ai/claude-code) wit
 | Cloudflare Workers | `cloudflare-workers` | `wrangler.toml` |
 | Cloudflare Pages | `cloudflare-pages` | `wrangler.toml` with `pages_build_output_dir` |
 | Railway | `railway` | `railway.json`, `railway.toml` |
+| Kubernetes | `kubernetes` | `k8s/`, `deployment.yaml`, `kustomization.yaml`, `Chart.yaml` |
 
 ## Installation
 
@@ -47,7 +48,8 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
        ├── vercel.sh
        ├── cloudflare-workers.sh
        ├── cloudflare-pages.sh
-       └── railway.sh
+       ├── railway.sh
+       └── kubernetes.sh
    ```
 
 2. Make scripts executable:
@@ -65,7 +67,7 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
            "hooks": [
              {
                "type": "command",
-               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|gcloud functions deploy|firebase deploy|vercel|wrangler deploy|railway up)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
+               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|gcloud functions deploy|firebase deploy|vercel|wrangler deploy|railway up|kubectl apply|helm upgrade)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
                "timeout": 600
              }
            ]
@@ -108,6 +110,8 @@ The hook automatically triggers when you run deployment commands like:
 - `vercel`
 - `wrangler deploy`
 - `railway up`
+- `kubectl apply`
+- `helm upgrade`
 
 ### As Slash Command
 
@@ -195,6 +199,14 @@ Then use `/deploy` in Claude Code.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RAILWAY_ENVIRONMENT` | Environment | `production` |
+
+#### Kubernetes
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `K8S_DEPLOYMENT` | Deployment name | (required) |
+| `K8S_NAMESPACE` | Namespace | `default` |
+| `K8S_CONTEXT` | Kubectl context | (current) |
+| `K8S_CONFIGMAP` | ConfigMap for env vars | (optional) |
 
 ### Local Env File Search Order
 
