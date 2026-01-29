@@ -23,6 +23,13 @@ A universal deployment hook for [Claude Code](https://claude.ai/claude-code) wit
 | Cloudflare Pages | `cloudflare-pages` | `wrangler.toml` with `pages_build_output_dir` |
 | Railway | `railway` | `railway.json`, `railway.toml` |
 | Kubernetes | `kubernetes` | `k8s/`, `deployment.yaml`, `kustomization.yaml`, `Chart.yaml` |
+| AWS Lambda | `aws-lambda` | `serverless.yml`, `template.yaml` (SAM) |
+| AWS ECS/Fargate | `aws-ecs` | `ecs-task-def.json`, `task-definition.json` |
+| Azure Functions | `azure-functions` | `host.json`, `local.settings.json` |
+| Heroku | `heroku` | `Procfile`, `app.json`, `heroku.yml` |
+| Fly.io | `flyio` | `fly.toml` |
+| Render | `render` | `render.yaml` |
+| Netlify | `netlify` | `netlify.toml`, `.netlify/` |
 
 ## Installation
 
@@ -49,7 +56,14 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
        ├── cloudflare-workers.sh
        ├── cloudflare-pages.sh
        ├── railway.sh
-       └── kubernetes.sh
+       ├── kubernetes.sh
+       ├── aws-lambda.sh
+       ├── aws-ecs.sh
+       ├── azure-functions.sh
+       ├── heroku.sh
+       ├── flyio.sh
+       ├── render.sh
+       └── netlify.sh
    ```
 
 2. Make scripts executable:
@@ -67,7 +81,7 @@ git clone https://github.com/sterlingsky/claude-deploy-hook.git .claude/hooks
            "hooks": [
              {
                "type": "command",
-               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|gcloud functions deploy|firebase deploy|vercel|wrangler deploy|railway up|kubectl apply|helm upgrade)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
+               "command": "if echo \"$TOOL_INPUT\" | grep -qE '(gcloud run deploy|gcloud functions deploy|firebase deploy|vercel|wrangler deploy|railway up|kubectl apply|helm upgrade|sam deploy|serverless deploy|aws lambda|aws ecs|func azure|heroku|fly deploy|netlify deploy)'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deploy.sh; fi",
                "timeout": 600
              }
            ]
@@ -112,6 +126,14 @@ The hook automatically triggers when you run deployment commands like:
 - `railway up`
 - `kubectl apply`
 - `helm upgrade`
+- `sam deploy`
+- `serverless deploy`
+- `aws lambda update-function-code`
+- `aws ecs update-service`
+- `func azure functionapp publish`
+- `heroku` (git push)
+- `fly deploy`
+- `netlify deploy`
 
 ### As Slash Command
 
@@ -207,6 +229,51 @@ Then use `/deploy` in Claude Code.
 | `K8S_NAMESPACE` | Namespace | `default` |
 | `K8S_CONTEXT` | Kubectl context | (current) |
 | `K8S_CONFIGMAP` | ConfigMap for env vars | (optional) |
+
+#### AWS Lambda
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AWS_LAMBDA_FUNCTION` | Function name | (required) |
+| `AWS_REGION` | AWS region | `us-east-1` |
+| `AWS_PROFILE` | AWS CLI profile | (default) |
+
+#### AWS ECS/Fargate
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AWS_ECS_CLUSTER` | ECS cluster name | (required) |
+| `AWS_ECS_SERVICE` | ECS service name | (required) |
+| `AWS_REGION` | AWS region | `us-east-1` |
+| `AWS_PROFILE` | AWS CLI profile | (default) |
+
+#### Azure Functions
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AZURE_FUNCTION_APP` | Function app name | (required) |
+| `AZURE_RESOURCE_GROUP` | Resource group | (required) |
+| `AZURE_SUBSCRIPTION` | Subscription ID | (optional) |
+
+#### Heroku
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HEROKU_APP` | App name | (from git remote) |
+| `HEROKU_REMOTE` | Git remote name | `heroku` |
+
+#### Fly.io
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FLY_APP` | App name | (from fly.toml) |
+
+#### Render
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RENDER_SERVICE_ID` | Service ID | (required) |
+| `RENDER_API_KEY` | API key | (required) |
+
+#### Netlify
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NETLIFY_SITE_ID` | Site ID | (from .netlify/) |
+| `NETLIFY_AUTH_TOKEN` | Auth token | (from CLI) |
 
 ### Local Env File Search Order
 
@@ -323,11 +390,18 @@ Exit codes:
 
 - Bash 4.0+
 - `jq` for JSON parsing
+- `curl` for API calls
 - Provider-specific CLI tools:
   - GCP: `gcloud`, `firebase`
+  - AWS: `aws`, `sam`, `serverless` (optional)
+  - Azure: `az`, `func`
   - Vercel: `vercel`
   - Cloudflare: `wrangler`
   - Railway: `railway`
+  - Kubernetes: `kubectl`, `helm` (optional)
+  - Heroku: `heroku`
+  - Fly.io: `flyctl`
+  - Netlify: `netlify`
 
 ## License
 
